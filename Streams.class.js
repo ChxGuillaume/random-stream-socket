@@ -97,6 +97,8 @@ class Streams {
                 'Authorization': `Bearer ${this.bearer}`,
             },
         }).then(r => {
+            this.firstFetchedViewerCount = r.data.data[0].viewer_count;
+
             r.data.data.forEach(e => {
                 this.tryAddStream(e);
             });
@@ -116,7 +118,8 @@ class Streams {
                 this.tryAddStream(e);
             });
 
-            if (r.data.data.length === 100) this.getNextPage(r.data.pagination.cursor);
+            if (r.data.data[0] && r.data.data[0].viewer_count < this.firstFetchedViewerCount)
+                this.getNextPage(r.data.pagination.cursor);
             else {
                 this.streams = this.fetchStreams;
                 this.streams.sort((a, b) => {
@@ -125,12 +128,13 @@ class Streams {
                     else return 0;
                 });
 
-                console.log('STEAMS FETCHED'.cyan);
+                console.log('STEAMS FETCHED'.cyan, `(${this.streams.length} total)`.yellow);
+
                 this.events.fetchFinished(this.streams);
-                this.fetchGames();
+                this.fetchGames().then();
             }
         }).catch(e => {
-            console.log(e);
+            console.log(e.response);
             let resetTimeStamp = parseInt(e.response.headers['ratelimit-reset']);
             let resetIn = (resetTimeStamp * 1000) - Date.now();
 
