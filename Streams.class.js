@@ -10,7 +10,7 @@ class Streams {
 
         this.fetchStreams = [];
         this.fetchStreamsIDs = [];
-        this.fetchEvery = 30 * 1000;
+        this.fetchEvery = 60 * 1000;
         this.bearer = '';
 
         this.canFetch = true;
@@ -150,9 +150,14 @@ class Streams {
             }
         }).catch(e => {
             let resetTimeStamp = parseInt(e.response.headers['ratelimit-reset']);
-            let resetIn = (resetTimeStamp * 1000) - Date.now();
+            let RateLimit = e.response.headers['ratelimit-limit'];
+            let RateLimitRemaining = e.response.headers['ratelimit-remaining'];
 
-            console.error('ERROR | Retry in:'.red, `${resetIn / 1000} s`.magenta);
+            let resetIn = (resetTimeStamp * 1000) - Date.now() + 2000;
+
+            console.error('ERROR | Retry in:'.red, `${resetIn / 1000} s`.magenta, `RPM: ${RateLimit} - RPMR: ${RateLimitRemaining}`.yellow);
+
+            this.refreshToken();
 
             if (e.response.status) setTimeout(() => {
                 this.getNextPage(cursor);
