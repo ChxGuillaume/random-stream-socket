@@ -133,7 +133,7 @@ class Streams {
                 this.tryAddStream(e);
             });
 
-            if (r.data.data[0] && r.data.data[0].viewer_count < this.firstFetchedViewerCount)
+            if (r.data.data[0] && r.data.data[0].viewer_count < this.firstFetchedViewerCount && r.data.pagination.cursor)
                 this.getNextPage(r.data.pagination.cursor);
             else {
                 this.streams = this.fetchStreams;
@@ -153,7 +153,7 @@ class Streams {
             let RateLimit = e.response.headers['ratelimit-limit'];
             let RateLimitRemaining = e.response.headers['ratelimit-remaining'];
 
-            let resetIn = (resetTimeStamp * 1000) - Date.now() + 2000;
+            let resetIn = (resetTimeStamp * 1000) - Date.now() + 500;
 
             console.error('ERROR | Retry in:'.red, `${resetIn / 1000} s`.magenta, `RPM: ${RateLimit} - RPMR: ${RateLimitRemaining}`.yellow);
 
