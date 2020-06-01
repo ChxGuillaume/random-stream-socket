@@ -10,8 +10,10 @@ class Streams {
 
         this.fetchStreams = [];
         this.fetchStreamsIDs = [];
-        this.fetchEvery = 60 * 1000;
+        this.fetchEvery = 30 * 1000;
         this.bearer = '';
+
+        this.canFetch = true;
 
         axios.post(`https://id.twitch.tv/oauth2/token?client_id=${process.env.TWITCH_CLIENT_ID}&client_secret=${process.env.TWITCH_CLIENT_SECRET}&grant_type=client_credentials`)
             .then(r => {
@@ -71,8 +73,13 @@ class Streams {
     /// FETCHING FUNCTIONS
 
     startFetchStreams() {
-        console.log('NEXT FETCH'.yellow, (new Date(Date.now() + this.fetchEvery)).toLocaleTimeString('fr-FR').magenta);
-        this.startGetStreams();
+        if (this.canFetch) {
+            this.canFetch = false;
+
+            console.log('NEXT FETCH'.yellow, (new Date(Date.now() + this.fetchEvery)).toLocaleTimeString('fr-FR').magenta);
+
+            this.startGetStreams();
+        }
 
         setTimeout(() => {
             this.startFetchStreams();
@@ -131,10 +138,9 @@ class Streams {
                 console.log('STEAMS FETCHED'.cyan, `(${this.streams.length} total)`.yellow);
 
                 this.events.fetchFinished(this.streams);
-                this.fetchGames().then();
+                this.fetchGames().then(() => this.canFetch = true);
             }
         }).catch(e => {
-            console.log(e.response);
             let resetTimeStamp = parseInt(e.response.headers['ratelimit-reset']);
             let resetIn = (resetTimeStamp * 1000) - Date.now();
 
@@ -147,48 +153,51 @@ class Streams {
     }
 
     async fetchGames() {
-        console.log('FETCHING GAMES'.blue)
-        let gamesIds = [];
-        let games = {};
+        return new Promise(async (resolve, reject) => {
+            console.log('FETCHING GAMES'.blue)
+            let gamesIds = [];
+            let games = {};
 
-        this.streams.forEach(s => {
-            if (!gamesIds.includes(s.game_id)) gamesIds.push(s.game_id);
-        });
+            this.streams.forEach(s => {
+                if (!gamesIds.includes(s.game_id)) gamesIds.push(s.game_id);
+            });
 
-        for (let i = 0; i < Math.ceil(gamesIds.length / 100); i++) {
-            let isLastPart = (i === Math.ceil(gamesIds.length / 100));
+            for (let i = 0; i < Math.ceil(gamesIds.length / 100); i++) {
+                let isLastPart = (i === Math.ceil(gamesIds.length / 100));
 
-            let idList = [];
-            for (let j = i * 100; j < i * 100 + 100; j++) {
-                idList.push(`id=${gamesIds[j]}`);
+                let idList = [];
+                for (let j = i * 100; j < i * 100 + 100; j++) {
+                    idList.push(`id=${gamesIds[j]}`);
+                }
+
+                await axios.get(`https://api.twitch.tv/helix/games?${idList.join('&')}`, {
+                    headers: {
+                        'Client-ID': process.env.TWITCH_CLIENT_ID,
+                        'Authorization': `Bearer ${this.bearer}`,
+                    },
+                }).then(d => {
+                    d.data.data.forEach(g => {
+                        games[g.id] = {
+                            name: g.name,
+                            imgUrl: g.box_art_url,
+                            streamCount: 0,
+                        };
+                    })
+                });
             }
 
-            await axios.get(`https://api.twitch.tv/helix/games?${idList.join('&')}`, {
-                headers: {
-                    'Client-ID': process.env.TWITCH_CLIENT_ID,
-                    'Authorization': `Bearer ${this.bearer}`,
-                },
-            }).then(d => {
-                d.data.data.forEach(g => {
-                    games[g.id] = {
-                        name: g.name,
-                        imgUrl: g.box_art_url,
-                        streamCount: 0,
-                    };
-                })
+            this.streams.forEach(s => {
+                if (games[s.game_id]) games[s.game_id].streamCount++;
             });
-        }
 
-        this.streams.forEach(s => {
-            if (games[s.game_id]) games[s.game_id].streamCount++;
+            this.gamesList = {
+                games,
+                length: Object.keys(games).length,
+            };
+
+            console.log('GAMES FETCHED'.blue)
+            resolve();
         });
-
-        this.gamesList = {
-            games,
-            length: Object.keys(games).length,
-        };
-
-        console.log('GAMES FETCHED'.blue)
     }
 }
 
